@@ -563,6 +563,53 @@ def cmd_predict(verbose: bool) -> None:
     )
 
 
+@cli.command("time-sync")
+@click.option(
+    "--host",
+    default=default_host,
+    show_default="192.168.0.100",
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=default_port,
+    show_default="8899",
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default=default_inv_type,
+    show_default="standard",
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_time_sync(host: str, port: int, retries: int, inv_type: str, verbose: bool) -> None:
+    """Set the inverter clock to the current computer date and time."""
+    import datetime as dt_mod
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    now = dt_mod.datetime.now()
+    try:
+        InverterWriter(config, inv_type=inv_type).sync_time(now)
+        err.print(f"[green]Inverter time set to {now.strftime('%Y-%m-%d %H:%M:%S')}[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 @cli.command("auto")
 @click.option("--dry-run", is_flag=True, help="Show what would be set without writing to the inverter.")
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")

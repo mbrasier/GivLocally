@@ -7,7 +7,7 @@ import logging
 from datetime import time
 
 from givenergy_modbus_async.client.client import Client
-from givenergy_modbus_async.client.commands import _set_charge_slot, set_soc_target
+from givenergy_modbus_async.client.commands import _set_charge_slot, set_soc_target, set_system_date_time
 from givenergy_modbus_async.model import TimeSlot
 
 from .config import InverterConfig
@@ -111,6 +111,17 @@ class InverterWriter:
         requests = _set_charge_slot(discharge=True, idx=slot, slot=timeslot, inv_type=self._inv_type)
         requests += set_soc_target(discharge=True, idx=slot, target_soc=floor_soc, inv_type=self._inv_type)
         log.info("Setting discharge slot %d: %s → %s, floor %d%%", slot, start, end, floor_soc)
+        asyncio.run(_write_async(self._config, requests))
+
+    def sync_time(self, dt: datetime) -> None:
+        """
+        Set the inverter's clock to the given datetime.
+
+        Args:
+            dt: The datetime to set (typically datetime.now()).
+        """
+        requests = set_system_date_time(dt)
+        log.info("Syncing inverter time to %s", dt.strftime("%Y-%m-%d %H:%M:%S"))
         asyncio.run(_write_async(self._config, requests))
 
     def clear_discharge_slot(self, slot: int) -> None:

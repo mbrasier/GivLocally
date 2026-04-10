@@ -64,6 +64,7 @@ class InverterSnapshot:
     firmware_version: str = ""
     dsp_firmware_version: str = ""
     arm_firmware_version: str = ""
+    system_time: Optional[datetime] = None
 
     # --- Real-time power (W) ---
     p_pv1_w: float = 0.0
@@ -246,6 +247,7 @@ def _inverter_snapshot(plant) -> InverterSnapshot:
     snap.firmware_version = _str(inv, "firmware_version", "inverter_firmware_version")
     snap.dsp_firmware_version = _str(inv, "dsp_firmware_version")
     snap.arm_firmware_version = _str(inv, "arm_firmware_version")
+    snap.system_time = _get(inv, "system_time")
 
     # Real-time power
     snap.p_pv1_w = _float(inv, "p_pv1")

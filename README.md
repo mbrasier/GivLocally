@@ -161,6 +161,26 @@ givlocally read --host 192.168.0.100 --batteries 2
 
 ---
 
+### `time-sync` — synchronise the inverter clock
+
+```
+givlocally time-sync
+```
+
+Sets the inverter's internal clock to the current date and time of the computer running the command. Useful if the inverter clock has drifted or reset after a power cut.
+
+The `read` command shows the inverter's current date and time in the Device Identity section so you can check whether a sync is needed.
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | _(from setup)_ | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--inv-type` | _(standard)_ | Inverter variant |
+| `-v, --verbose` | | Enable debug logging |
+
+---
+
 ### `auto` — set overnight charge automatically
 
 ```

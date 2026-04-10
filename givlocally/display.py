@@ -49,6 +49,8 @@ def print_snapshot(snap: InverterSnapshot) -> None:
     t.add_row("DSP firmware", snap.dsp_firmware_version or "[dim]n/a[/dim]")
     t.add_row("ARM firmware", snap.arm_firmware_version or "[dim]n/a[/dim]")
     t.add_row("Batteries detected", str(snap.num_batteries))
+    if snap.system_time:
+        t.add_row("Inverter date/time", snap.system_time.strftime("%Y-%m-%d %H:%M:%S"))
     console.print(t)
 
     # ── Real-time power ───────────────────────────────────────────────────────
