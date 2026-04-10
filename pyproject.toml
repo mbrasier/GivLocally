@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "givlocally"
+version = "0.1.0"
+description = "Local control and monitoring of GivEnergy Gen3 inverters without cloud APIs"
+requires-python = ">=3.10"
+dependencies = [
+    "givenergy-modbus-async>=2.0.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+]
+
+[project.scripts]
+givlocally = "givlocally.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["givlocally*"]
