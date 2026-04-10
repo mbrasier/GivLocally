@@ -14,6 +14,48 @@ Communicates directly with the inverter over your local network using Modbus TCP
 
 ---
 
+## Installing Python
+
+Skip this section if you already have Python 3.10 or later installed. You can check by running:
+
+```
+python --version
+```
+
+### Windows
+
+1. Go to [python.org/downloads](https://www.python.org/downloads/) and download the latest Python 3 installer.
+2. Run the installer. **Make sure to tick "Add python.exe to PATH"** on the first screen before clicking Install.
+3. Open a new Command Prompt and confirm it works:
+
+```
+python --version
+```
+
+### macOS
+
+The recommended way is via [Homebrew](https://brew.sh). If you don't have Homebrew, install it first by pasting this into Terminal:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Then install Python:
+
+```bash
+brew install python
+```
+
+Confirm it works:
+
+```bash
+python3 --version
+```
+
+> On macOS, use `python3` and `pip3` instead of `python` and `pip` in all commands below.
+
+---
+
 ## Installation
 
 ```bash

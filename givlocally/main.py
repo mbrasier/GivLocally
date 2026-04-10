@@ -110,6 +110,70 @@ def cmd_read(
         print_snapshot(snapshot)
 
 
+@cli.command("summary")
+@click.option(
+    "--host",
+    default="192.168.0.100",
+    show_default=True,
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=8899,
+    show_default=True,
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_summary(host: str, port: int, retries: int, verbose: bool) -> None:
+    """Print a one-line summary of current inverter state."""
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        snap = InverterReader(config).read_all()
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+    solar_kw = (snap.p_pv1_w + snap.p_pv2_w) / 1000
+    load_kw = snap.p_load_w / 1000
+    bat_kw = abs(snap.p_battery_w) / 1000
+    grid_kw = abs(snap.p_grid_w) / 1000
+    soc = snap.battery_soc_pct
+
+    if snap.p_battery_w > 50:
+        bat_status = f"[yellow]charging {bat_kw:.2f} kW[/yellow]"
+    elif snap.p_battery_w < -50:
+        bat_status = f"[cyan]discharging {bat_kw:.2f} kW[/cyan]"
+    else:
+        bat_status = "[dim]idle[/dim]"
+
+    if snap.p_grid_w > 50:
+        grid_status = f"exporting [green]{grid_kw:.2f} kW[/green]"
+    elif snap.p_grid_w < -50:
+        grid_status = f"importing [red]{grid_kw:.2f} kW[/red]"
+    else:
+        grid_status = "[dim]idle[/dim]"
+
+    console = Console()
+    console.print(
+        f"Solar [green]{solar_kw:.2f} kW[/green]  "
+        f"Load [red]{load_kw:.2f} kW[/red]  "
+        f"Grid {grid_status}  "
+        f"Battery {bat_status} @ [bold]{soc}%[/bold]"
+    )
+
+
 def _common_connection_options(fn):
     """Decorator that attaches the shared host/port/batteries/retries options."""
     fn = click.option(
