@@ -13,6 +13,10 @@ from rich.console import Console
 from .config import InverterConfig
 from .display import print_snapshot
 from .reader import InverterReader
+from .settings import (
+    default_host, default_port, default_batteries, default_inv_type,
+    load as load_settings, save as save_settings, config_path, DEFAULTS,
+)
 from .writer import InverterWriter
 
 err = Console(stderr=True)
@@ -38,22 +42,22 @@ def cli(ctx: click.Context) -> None:
 @cli.command("read")
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
 @click.option(
     "--batteries",
-    default=1,
-    show_default=True,
+    default=default_batteries,
+    show_default="1",
     envvar="GIVENERGY_BATTERIES",
     help="Number of battery packs connected.",
 )
@@ -113,15 +117,15 @@ def cmd_read(
 @cli.command("summary")
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
@@ -174,39 +178,6 @@ def cmd_summary(host: str, port: int, retries: int, verbose: bool) -> None:
     )
 
 
-def _common_connection_options(fn):
-    """Decorator that attaches the shared host/port/batteries/retries options."""
-    fn = click.option(
-        "--inv-type",
-        default="",
-        show_default=True,
-        envvar="GIVENERGY_INV_TYPE",
-        type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
-        help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
-    )(fn)
-    fn = click.option(
-        "--retries",
-        default=3,
-        show_default=True,
-        help="Number of connection attempts before giving up.",
-    )(fn)
-    fn = click.option(
-        "--port",
-        default="192.168.0.100",
-        show_default=True,
-        envvar="GIVENERGY_PORT",
-        help="Modbus TCP port on the inverter.",
-    )(fn)
-    fn = click.option(
-        "--host",
-        default="192.168.0.100",
-        show_default=True,
-        envvar="GIVENERGY_HOST",
-        help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
-    )(fn)
-    return fn
-
-
 @cli.group("charge-slot")
 def charge_slot_group() -> None:
     """Manage timed charge slots on the inverter."""
@@ -219,15 +190,15 @@ def charge_slot_group() -> None:
 @click.argument("target_soc", metavar="SOC", type=click.IntRange(4, 100))
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
@@ -239,8 +210,8 @@ def charge_slot_group() -> None:
 )
 @click.option(
     "--inv-type",
-    default="",
-    show_default=True,
+    default=default_inv_type,
+    show_default="standard",
     envvar="GIVENERGY_INV_TYPE",
     type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
     help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
@@ -292,15 +263,15 @@ def cmd_charge_slot_set(
 @click.argument("slot", type=click.IntRange(1, 10))
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
@@ -312,8 +283,8 @@ def cmd_charge_slot_set(
 )
 @click.option(
     "--inv-type",
-    default="",
-    show_default=True,
+    default=default_inv_type,
+    show_default="standard",
     envvar="GIVENERGY_INV_TYPE",
     type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
     help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
@@ -359,15 +330,15 @@ def discharge_slot_group() -> None:
 @click.argument("floor_soc", metavar="SOC", type=click.IntRange(4, 100))
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
@@ -379,8 +350,8 @@ def discharge_slot_group() -> None:
 )
 @click.option(
     "--inv-type",
-    default="",
-    show_default=True,
+    default=default_inv_type,
+    show_default="standard",
     envvar="GIVENERGY_INV_TYPE",
     type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
     help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
@@ -432,15 +403,15 @@ def cmd_discharge_slot_set(
 @click.argument("slot", type=click.IntRange(1, 10))
 @click.option(
     "--host",
-    default="192.168.0.100",
-    show_default=True,
+    default=default_host,
+    show_default="192.168.0.100",
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
 )
 @click.option(
     "--port",
-    default=8899,
-    show_default=True,
+    default=default_port,
+    show_default="8899",
     envvar="GIVENERGY_PORT",
     help="Modbus TCP port on the inverter.",
 )
@@ -452,8 +423,8 @@ def cmd_discharge_slot_set(
 )
 @click.option(
     "--inv-type",
-    default="",
-    show_default=True,
+    default=default_inv_type,
+    show_default="standard",
     envvar="GIVENERGY_INV_TYPE",
     type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
     help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
@@ -485,6 +456,91 @@ def cmd_discharge_slot_clear(
             traceback.print_exc()
         import sys
         sys.exit(1)
+
+
+@cli.command("setup")
+def cmd_setup() -> None:
+    """Interactively configure GivLocally and save settings to disk."""
+    existing = load_settings()
+    conn = existing.get("connection", DEFAULTS["connection"])
+    solar = existing.get("solar", DEFAULTS["solar"])
+
+    console = Console()
+    console.print("\n[bold cyan]GivLocally Setup[/bold cyan]\n")
+
+    if existing:
+        console.print(f"[dim]Existing config found at {config_path()}. Press Enter to keep current values.[/dim]\n")
+
+    # ── Connection ────────────────────────────────────────────────────────────
+    console.print("[bold]Connection[/bold]")
+
+    host = click.prompt("  Inverter IP address", default=conn["host"])
+    port = click.prompt("  Modbus port", default=conn["port"], type=int)
+    batteries = click.prompt("  Number of battery packs", default=conn["batteries"], type=int)
+    inv_type_choice = click.prompt(
+        "  Inverter type",
+        default=conn["inv_type"] or "standard",
+        type=click.Choice(["standard", "3ph", "ems"]),
+    )
+    inv_type = "" if inv_type_choice == "standard" else inv_type_choice
+
+    # ── Solar panels ──────────────────────────────────────────────────────────
+    console.print("\n[bold]Solar Panels[/bold]")
+    console.print("[dim]  This information will be used to calculate solar forecasts.[/dim]\n")
+
+    capacity_kwp = click.prompt(
+        "  Total panel capacity (kWp)",
+        default=solar["capacity_kwp"],
+        type=float,
+    )
+    tilt_deg = click.prompt(
+        "  Panel tilt in degrees (0 = flat, 90 = vertical)",
+        default=solar["tilt_deg"],
+        type=click.IntRange(0, 90),
+    )
+    console.print("  [dim]Azimuth: 0/360 = North, 90 = East, 180 = South, 270 = West[/dim]")
+    azimuth_deg = click.prompt(
+        "  Panel azimuth in degrees",
+        default=solar["azimuth_deg"],
+        type=click.IntRange(0, 360),
+    )
+    latitude = click.prompt(
+        "  Latitude (decimal degrees, e.g. 51.5 for London)",
+        default=solar["latitude"],
+        type=float,
+    )
+    longitude = click.prompt(
+        "  Longitude (decimal degrees, e.g. -0.1 for London)",
+        default=solar["longitude"],
+        type=float,
+    )
+    efficiency = click.prompt(
+        "  System efficiency factor (0.0–1.0, accounting for inverter losses, temperature and soiling)",
+        default=solar["efficiency"],
+        type=click.FloatRange(0.1, 1.0),
+    )
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+    data = {
+        "connection": {
+            "host": host,
+            "port": port,
+            "batteries": batteries,
+            "inv_type": inv_type,
+        },
+        "solar": {
+            "capacity_kwp": capacity_kwp,
+            "tilt_deg": tilt_deg,
+            "azimuth_deg": azimuth_deg,
+            "latitude": latitude,
+            "longitude": longitude,
+            "efficiency": efficiency,
+        },
+    }
+
+    path = save_settings(data)
+    console.print(f"\n[green]Settings saved to {path}[/green]")
+    console.print("[dim]These will be used as defaults for all commands.[/dim]\n")
 
 
 if __name__ == "__main__":

@@ -68,15 +68,55 @@ This installs the `givlocally` command.
 
 ## Quick start
 
+Run the setup wizard to configure your inverter connection and solar panel details:
+
 ```bash
-givlocally read --host 192.168.0.100
+givlocally setup
 ```
 
-Connects to the inverter and prints a full status report covering real-time power, battery state, charge schedule, and lifetime energy totals.
+Then read the current inverter status:
+
+```bash
+givlocally read
+```
+
+Once setup has been run, the `--host` and other connection options default to your saved settings so you don't need to type them on every command.
 
 ---
 
 ## Commands
+
+### `setup` — configure GivLocally
+
+```
+givlocally setup
+```
+
+Runs an interactive wizard that saves your settings to a config file. Run this once after installing. The wizard asks for:
+
+**Connection settings**
+- Inverter IP address and Modbus port
+- Number of battery packs
+- Inverter type (standard Gen3, three-phase, or EMS)
+
+**Solar panel details** _(used for future solar forecast features)_
+- Total panel capacity in kWp
+- Panel tilt (0° = flat, 90° = vertical)
+- Panel azimuth (0°/360° = North, 90° = East, 180° = South, 270° = West)
+- Latitude and longitude
+- System efficiency factor (0.0–1.0, accounting for inverter losses, temperature, and soiling)
+
+Settings are saved to:
+
+| Platform | Path |
+|---|---|
+| Windows | `%APPDATA%\givlocally\config.toml` |
+| macOS | `~/Library/Application Support/givlocally/config.toml` |
+| Linux | `~/.config/givlocally/config.toml` |
+
+Re-running `givlocally setup` will show existing values as defaults, so you can update individual settings without re-entering everything.
+
+---
 
 ### `read` — display inverter status
 
@@ -231,7 +271,7 @@ givlocally discharge-slot clear 1 --host 192.168.0.100
 
 ## Environment variables
 
-All connection options can be set via environment variables so you don't have to repeat them on every command.
+All connection options can be set via environment variables. These take precedence over values saved by `givlocally setup`.
 
 | Variable | Option |
 |---|---|

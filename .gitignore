@@ -17,3 +17,6 @@ env/
 
 # Environment
 .env
+
+# GivLocally config (stored in OS app data, but ignore if placed here accidentally)
+config.toml
