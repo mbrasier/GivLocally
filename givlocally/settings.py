@@ -39,6 +39,15 @@ DEFAULTS: dict[str, Any] = {
     "usage": {
         "daily_kwh": 0.0,
     },
+    "battery": {
+        "capacity_kwh": 0.0,
+        "min_soc": 10,
+    },
+    "auto": {
+        "charge_slot": 1,
+        "charge_start": "01:00",
+        "charge_end": "05:00",
+    },
 }
 
 

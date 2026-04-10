@@ -109,6 +109,14 @@ Runs an interactive wizard that saves your settings to a config file. Run this o
 **Household usage** _(used to calculate required overnight charge level)_
 - Expected daily household consumption in kWh
 
+**Battery**
+- Usable battery capacity in kWh
+- Minimum SOC to keep in reserve (%)
+
+**Auto charge** _(used by `givlocally auto`)_
+- Charge slot number (1–10)
+- Charge slot start and end time
+
 Settings are saved to:
 
 | Platform | Path |
@@ -148,6 +156,66 @@ givlocally read --host 192.168.0.100 --output json
 # Two battery packs
 givlocally read --host 192.168.0.100 --batteries 2
 ```
+
+---
+
+### `auto` — set overnight charge automatically
+
+```
+givlocally auto [--dry-run]
+```
+
+Combines the solar forecast with your settings and writes the result directly to the inverter in one step:
+
+1. Fetches tomorrow's solar generation forecast
+2. Calculates the required overnight charge target
+3. Programs the configured charge slot on the inverter to that SOC
+
+```
+Fetching solar forecast …
+  Tomorrow's forecast: 1.8 kWh  Daily usage: 8.0 kWh  Shortfall: 6.2 kWh
+  Charge slot 1 (01:00 → 05:00)  →  target 75%
+
+Charge slot 1 set to 01:00 → 05:00 @ 75%
+```
+
+Use `--dry-run` to see what would be set without touching the inverter. This is useful for testing or scheduling via cron before going live.
+
+The charge slot number and window are configured in `givlocally setup` under **Auto Charge**.
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Show what would be set without writing to the inverter |
+| `-v, --verbose` | Enable debug logging |
+
+---
+
+### `predict` — overnight charge recommendation
+
+```
+givlocally predict
+```
+
+Fetches tomorrow's solar generation forecast from [forecast.solar](https://forecast.solar) (free, no account needed) and calculates what SOC the battery should be charged to overnight so that solar + battery together cover your expected daily household consumption.
+
+```
+Fetching solar forecast from forecast.solar …
+
+  Today's predicted generation      3.2 kWh  (raw 4.0 kWh × 80% efficiency)
+  Tomorrow's predicted generation   1.8 kWh  (raw 2.2 kWh × 80% efficiency)
+  Expected daily consumption        8.0 kWh
+  Shortfall solar cannot cover      6.2 kWh
+  Battery capacity                  9.5 kWh
+  Minimum SOC reserve               10%
+
+  Recommended overnight charge target: 75%
+```
+
+Requires `givlocally setup` to have been completed with solar panel, household usage, and battery capacity values.
+
+| Option | Description |
+|---|---|
+| `-v, --verbose` | Enable debug logging |
 
 ---
 

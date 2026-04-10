@@ -12,6 +12,7 @@ from rich.console import Console
 
 from .config import InverterConfig
 from .display import print_snapshot
+from .forecast import fetch_forecast, required_overnight_soc
 from .reader import InverterReader
 from .settings import (
     default_host, default_port, default_batteries, default_inv_type,
@@ -458,6 +459,210 @@ def cmd_discharge_slot_clear(
         sys.exit(1)
 
 
+@cli.command("predict")
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_predict(verbose: bool) -> None:
+    """Predict the overnight charge target based on tomorrow's solar forecast.
+
+    Uses the forecast.solar API to estimate tomorrow's solar generation, then
+    calculates what SOC the battery needs to reach overnight so that solar +
+    battery together cover the expected daily household consumption.
+
+    Requires givlocally setup to have been run with solar panel, usage, and
+    battery settings filled in.
+    """
+    _setup_logging(verbose)
+    console = Console()
+    settings = load_settings()
+
+    solar = settings.get("solar", {})
+    usage = settings.get("usage", {})
+    battery = settings.get("battery", {})
+
+    # ── Validate settings ─────────────────────────────────────────────────────
+    missing = []
+    if not solar.get("capacity_kwp"):
+        missing.append("solar › capacity_kwp")
+    if not solar.get("latitude") and solar.get("latitude") != 0.0:
+        missing.append("solar › latitude")
+    if not solar.get("longitude") and solar.get("longitude") != 0.0:
+        missing.append("solar › longitude")
+    if not usage.get("daily_kwh"):
+        missing.append("usage › daily_kwh")
+    if not battery.get("capacity_kwh"):
+        missing.append("battery › capacity_kwh")
+
+    if missing:
+        err.print("[bold red]Error:[/bold red] The following settings are missing. Run [bold]givlocally setup[/bold] to configure them:")
+        for m in missing:
+            err.print(f"  [dim]•[/dim] {m}")
+        sys.exit(1)
+
+    # ── Fetch forecast ────────────────────────────────────────────────────────
+    console.print("\nFetching solar forecast from forecast.solar …")
+    try:
+        forecasts = fetch_forecast(
+            latitude=solar["latitude"],
+            longitude=solar["longitude"],
+            tilt_deg=solar.get("tilt_deg", 35),
+            azimuth_deg=solar.get("azimuth_deg", 180),
+            capacity_kwp=solar["capacity_kwp"],
+            efficiency=solar.get("efficiency", 0.8),
+            days=2,
+        )
+    except RuntimeError as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        sys.exit(1)
+
+    tomorrow_forecast = forecasts[1] if len(forecasts) > 1 else forecasts[0]
+    today_forecast = forecasts[0]
+
+    daily_kwh = usage["daily_kwh"]
+    capacity_kwh = battery["capacity_kwh"]
+    min_soc = battery.get("min_soc", 10)
+
+    recommended_soc, shortfall_kwh = required_overnight_soc(
+        forecast_kwh=tomorrow_forecast.generation_kwh,
+        daily_usage_kwh=daily_kwh,
+        battery_capacity_kwh=capacity_kwh,
+        min_soc=min_soc,
+    )
+
+    # ── Display ───────────────────────────────────────────────────────────────
+    console.print()
+    from rich.table import Table
+    from rich import box
+
+    t = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
+    t.add_column("Label", style="dim", min_width=34)
+    t.add_column("Value", style="bold white")
+
+    t.add_row("Today's predicted generation",
+              f"[green]{today_forecast.generation_kwh:.1f} kWh[/green]"
+              f" [dim](raw {today_forecast.raw_kwh:.1f} kWh × {solar.get('efficiency', 0.8):.0%} efficiency)[/dim]")
+    t.add_row("Tomorrow's predicted generation",
+              f"[green]{tomorrow_forecast.generation_kwh:.1f} kWh[/green]"
+              f" [dim](raw {tomorrow_forecast.raw_kwh:.1f} kWh × {solar.get('efficiency', 0.8):.0%} efficiency)[/dim]")
+    t.add_row("Expected daily consumption", f"{daily_kwh:.1f} kWh")
+
+    if shortfall_kwh > 0:
+        t.add_row("Shortfall solar cannot cover", f"[yellow]{shortfall_kwh:.1f} kWh[/yellow]")
+    else:
+        surplus = tomorrow_forecast.generation_kwh - daily_kwh
+        t.add_row("Solar surplus", f"[green]{surplus:.1f} kWh[/green] — solar alone should cover the day")
+
+    t.add_row("Battery capacity", f"{capacity_kwh:.1f} kWh")
+    t.add_row("Minimum SOC reserve", f"{min_soc}%")
+
+    console.print(t)
+
+    soc_color = "green" if recommended_soc <= 60 else "yellow" if recommended_soc <= 85 else "red"
+    console.print(
+        f"  [bold]Recommended overnight charge target:[/bold] "
+        f"[{soc_color} bold]{recommended_soc}%[/{soc_color} bold]\n"
+    )
+
+
+@cli.command("auto")
+@click.option("--dry-run", is_flag=True, help="Show what would be set without writing to the inverter.")
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_auto(dry_run: bool, verbose: bool) -> None:
+    """Predict overnight charge need and set the charge slot automatically.
+
+    Fetches tomorrow's solar forecast, calculates the required overnight charge
+    target, then programs the configured charge slot on the inverter to that SOC.
+
+    Configure the slot number and times with: givlocally setup
+    """
+    _setup_logging(verbose)
+    console = Console()
+    settings = load_settings()
+
+    solar = settings.get("solar", {})
+    usage = settings.get("usage", {})
+    battery = settings.get("battery", {})
+    auto = settings.get("auto", DEFAULTS["auto"])
+    conn = settings.get("connection", DEFAULTS["connection"])
+
+    # ── Validate ──────────────────────────────────────────────────────────────
+    missing = []
+    if not solar.get("capacity_kwp"):
+        missing.append("solar › capacity_kwp")
+    if not usage.get("daily_kwh"):
+        missing.append("usage › daily_kwh")
+    if not battery.get("capacity_kwh"):
+        missing.append("battery › capacity_kwh")
+    if missing:
+        err.print("[bold red]Error:[/bold red] Missing settings — run [bold]givlocally setup[/bold]:")
+        for m in missing:
+            err.print(f"  [dim]•[/dim] {m}")
+        sys.exit(1)
+
+    # ── Fetch forecast ────────────────────────────────────────────────────────
+    console.print("Fetching solar forecast …")
+    try:
+        forecasts = fetch_forecast(
+            latitude=solar["latitude"],
+            longitude=solar["longitude"],
+            tilt_deg=solar.get("tilt_deg", 35),
+            azimuth_deg=solar.get("azimuth_deg", 180),
+            capacity_kwp=solar["capacity_kwp"],
+            efficiency=solar.get("efficiency", 0.8),
+            days=2,
+        )
+    except RuntimeError as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        sys.exit(1)
+
+    tomorrow = forecasts[1] if len(forecasts) > 1 else forecasts[0]
+    daily_kwh = usage["daily_kwh"]
+    capacity_kwh = battery["capacity_kwh"]
+    min_soc = battery.get("min_soc", 10)
+
+    recommended_soc, shortfall_kwh = required_overnight_soc(
+        forecast_kwh=tomorrow.generation_kwh,
+        daily_usage_kwh=daily_kwh,
+        battery_capacity_kwh=capacity_kwh,
+        min_soc=min_soc,
+    )
+
+    slot = auto["charge_slot"]
+    start = auto["charge_start"]
+    end = auto["charge_end"]
+
+    console.print(
+        f"  Tomorrow's forecast: [green]{tomorrow.generation_kwh:.1f} kWh[/green]  "
+        f"Daily usage: {daily_kwh:.1f} kWh  "
+        f"Shortfall: [yellow]{shortfall_kwh:.1f} kWh[/yellow]"
+    )
+    console.print(
+        f"  Charge slot {slot} ({start} → {end})  →  "
+        f"target [bold]{recommended_soc}%[/bold]"
+    )
+
+    if dry_run:
+        console.print("\n[dim]Dry run — inverter not updated.[/dim]")
+        return
+
+    # ── Apply ─────────────────────────────────────────────────────────────────
+    config = InverterConfig(
+        host=conn["host"],
+        port=conn["port"],
+        retries=conn.get("retries", 3),
+    )
+    try:
+        InverterWriter(config, inv_type=conn.get("inv_type", "")).set_charge_slot(
+            slot, start, end, recommended_soc
+        )
+        console.print(f"\n[green]Charge slot {slot} set to {start} → {end} @ {recommended_soc}%[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error writing to inverter:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 @cli.command("setup")
 def cmd_setup() -> None:
     """Interactively configure GivLocally and save settings to disk."""
@@ -465,6 +670,8 @@ def cmd_setup() -> None:
     conn = existing.get("connection", DEFAULTS["connection"])
     solar = existing.get("solar", DEFAULTS["solar"])
     usage = existing.get("usage", DEFAULTS["usage"])
+    battery = existing.get("battery", DEFAULTS["battery"])
+    auto = existing.get("auto", DEFAULTS["auto"])
 
     console = Console()
     console.print("\n[bold cyan]GivLocally Setup[/bold cyan]\n")
@@ -531,6 +738,38 @@ def cmd_setup() -> None:
         type=click.FloatRange(0.0),
     )
 
+    # ── Battery ───────────────────────────────────────────────────────────────
+    console.print("\n[bold]Battery[/bold]\n")
+
+    capacity_kwh = click.prompt(
+        "  Usable battery capacity (kWh)",
+        default=battery["capacity_kwh"],
+        type=click.FloatRange(0.0),
+    )
+    min_soc = click.prompt(
+        "  Minimum SOC to keep in reserve (%)",
+        default=battery["min_soc"],
+        type=click.IntRange(0, 50),
+    )
+
+    # ── Auto charge ───────────────────────────────────────────────────────────
+    console.print("\n[bold]Auto Charge[/bold]")
+    console.print("[dim]  The charge slot used by the 'givlocally auto' command.[/dim]\n")
+
+    charge_slot = click.prompt(
+        "  Charge slot number",
+        default=auto["charge_slot"],
+        type=click.IntRange(1, 10),
+    )
+    charge_start = click.prompt(
+        "  Charge slot start time (HH:MM)",
+        default=auto["charge_start"],
+    )
+    charge_end = click.prompt(
+        "  Charge slot end time (HH:MM)",
+        default=auto["charge_end"],
+    )
+
     # ── Save ──────────────────────────────────────────────────────────────────
     data = {
         "connection": {
@@ -549,6 +788,15 @@ def cmd_setup() -> None:
         },
         "usage": {
             "daily_kwh": daily_kwh,
+        },
+        "battery": {
+            "capacity_kwh": capacity_kwh,
+            "min_soc": min_soc,
+        },
+        "auto": {
+            "charge_slot": charge_slot,
+            "charge_start": charge_start,
+            "charge_end": charge_end,
         },
     }
 
