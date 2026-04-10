@@ -38,7 +38,7 @@ def cli(ctx: click.Context) -> None:
 @cli.command("read")
 @click.option(
     "--host",
-    default="192.168.0.90",
+    default="192.168.0.100",
     show_default=True,
     envvar="GIVENERGY_HOST",
     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
@@ -338,6 +338,146 @@ def cmd_charge_slot_clear(
     try:
         InverterWriter(config, inv_type=inv_type).clear_charge_slot(slot)
         err.print(f"[green]Charge slot {slot} cleared[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        import sys
+        sys.exit(1)
+
+
+@cli.group("discharge-slot")
+def discharge_slot_group() -> None:
+    """Manage timed discharge slots on the inverter."""
+
+
+@discharge_slot_group.command("set")
+@click.argument("slot", type=click.IntRange(1, 10))
+@click.argument("start")
+@click.argument("end")
+@click.argument("floor_soc", metavar="SOC", type=click.IntRange(4, 100))
+@click.option(
+    "--host",
+    default="192.168.0.100",
+    show_default=True,
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=8899,
+    show_default=True,
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default="",
+    show_default=True,
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_discharge_slot_set(
+    slot: int,
+    start: str,
+    end: str,
+    floor_soc: int,
+    host: str,
+    port: int,
+    retries: int,
+    inv_type: str,
+    verbose: bool,
+) -> None:
+    """Configure a timed discharge slot.
+
+    \b
+    Arguments:
+      SLOT   Slot number to configure (1–10).
+      START  Time to start discharging, in HH:MM format.
+      END    Time to stop discharging, in HH:MM format.
+      SOC    Floor state of charge in percent (4–100). The inverter stops
+             discharging early if the battery reaches this level before END.
+
+    \b
+    Examples:
+      givlocally discharge-slot set 1 16:00 20:00 10
+          Slot 1: discharge from 16:00 to 20:00, stop at 10%.
+      givlocally discharge-slot set 2 07:00 09:00 20
+          Slot 2: discharge from 07:00 to 09:00, stop at 20%.
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        InverterWriter(config, inv_type=inv_type).set_discharge_slot(slot, start, end, floor_soc)
+        err.print(f"[green]Discharge slot {slot} set to {start} → {end}, floor {floor_soc}%[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        import sys
+        sys.exit(1)
+
+
+@discharge_slot_group.command("clear")
+@click.argument("slot", type=click.IntRange(1, 10))
+@click.option(
+    "--host",
+    default="192.168.0.100",
+    show_default=True,
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=8899,
+    show_default=True,
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default="",
+    show_default=True,
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_discharge_slot_clear(
+    slot: int,
+    host: str,
+    port: int,
+    retries: int,
+    inv_type: str,
+    verbose: bool,
+) -> None:
+    """Disable discharge SLOT by resetting its times to 00:00.
+
+    SLOT is 1–10.
+
+    Example: givlocally discharge-slot clear 1
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        InverterWriter(config, inv_type=inv_type).clear_discharge_slot(slot)
+        err.print(f"[green]Discharge slot {slot} cleared[/green]")
     except Exception as exc:
         err.print(f"[bold red]Error:[/bold red] {exc}")
         if verbose:

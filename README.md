@@ -180,6 +180,55 @@ givlocally charge-slot clear 1 --host 192.168.0.100
 
 ---
 
+### `discharge-slot` — manage timed discharge slots
+
+GivEnergy Gen3 inverters support up to 10 timed discharge slots. Each slot defines a window during which the inverter will discharge the battery (e.g. to avoid grid import during peak tariff periods), down to a floor state of charge.
+
+#### `discharge-slot set` — configure a slot
+
+```
+givlocally discharge-slot set SLOT START END SOC [OPTIONS]
+```
+
+| Argument | Description |
+|---|---|
+| `SLOT` | Slot number (1–10) |
+| `START` | Start time in `HH:MM` format |
+| `END` | End time in `HH:MM` format |
+| `SOC` | Floor state of charge in percent (4–100). The inverter stops discharging early if the battery reaches this level before END. |
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `192.168.0.100` | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--inv-type` | _(standard)_ | Inverter variant: blank = standard Gen3, `3ph` = three-phase, `ems` = EMS |
+| `-v, --verbose` | | Enable debug logging |
+
+**Examples**
+
+```bash
+# Discharge slot 1 during evening peak, don't go below 10%
+givlocally discharge-slot set 1 16:00 20:00 10 --host 192.168.0.100
+
+# Discharge slot 2 during morning peak, don't go below 20%
+givlocally discharge-slot set 2 07:00 09:00 20 --host 192.168.0.100
+```
+
+#### `discharge-slot clear` — disable a slot
+
+```
+givlocally discharge-slot clear SLOT [OPTIONS]
+```
+
+Resets the slot's start and end times to `00:00`, which disables it.
+
+```bash
+givlocally discharge-slot clear 1 --host 192.168.0.100
+```
+
+---
+
 ## Environment variables
 
 All connection options can be set via environment variables so you don't have to repeat them on every command.

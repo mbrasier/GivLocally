@@ -14,7 +14,7 @@ from .config import InverterConfig
 
 log = logging.getLogger(__name__)
 
-MAX_CHARGE_SLOTS = 10
+MAX_SLOTS = 10
 
 
 def _parse_hhmm(value: str) -> time:
@@ -66,8 +66,8 @@ class InverterWriter:
             end:        End time as "HH:MM".
             target_soc: Stop charging when battery reaches this SOC (4–100).
         """
-        if not (1 <= slot <= MAX_CHARGE_SLOTS):
-            raise ValueError(f"Slot must be 1–{MAX_CHARGE_SLOTS}, got {slot}")
+        if not (1 <= slot <= MAX_SLOTS):
+            raise ValueError(f"Slot must be 1–{MAX_SLOTS}, got {slot}")
         if not (4 <= target_soc <= 100):
             raise ValueError(f"Target SOC must be 4–100, got {target_soc}")
         t_start = _parse_hhmm(start)
@@ -85,8 +85,43 @@ class InverterWriter:
         Args:
             slot: Slot index, 1–10.
         """
-        if not (1 <= slot <= MAX_CHARGE_SLOTS):
-            raise ValueError(f"Slot must be 1–{MAX_CHARGE_SLOTS}, got {slot}")
+        if not (1 <= slot <= MAX_SLOTS):
+            raise ValueError(f"Slot must be 1–{MAX_SLOTS}, got {slot}")
         requests = _set_charge_slot(discharge=False, idx=slot, slot=None, inv_type=self._inv_type)
         log.info("Clearing charge slot %d", slot)
+        asyncio.run(_write_async(self._config, requests))
+
+    def set_discharge_slot(self, slot: int, start: str, end: str, floor_soc: int = 4) -> None:
+        """
+        Set a discharge slot's start/end times and floor SOC.
+
+        Args:
+            slot:      Slot index, 1–10.
+            start:     Start time as "HH:MM".
+            end:       End time as "HH:MM".
+            floor_soc: Stop discharging when battery reaches this SOC (4–100).
+        """
+        if not (1 <= slot <= MAX_SLOTS):
+            raise ValueError(f"Slot must be 1–{MAX_SLOTS}, got {slot}")
+        if not (4 <= floor_soc <= 100):
+            raise ValueError(f"Floor SOC must be 4–100, got {floor_soc}")
+        t_start = _parse_hhmm(start)
+        t_end = _parse_hhmm(end)
+        timeslot = TimeSlot(start=t_start, end=t_end)
+        requests = _set_charge_slot(discharge=True, idx=slot, slot=timeslot, inv_type=self._inv_type)
+        requests += set_soc_target(discharge=True, idx=slot, target_soc=floor_soc, inv_type=self._inv_type)
+        log.info("Setting discharge slot %d: %s → %s, floor %d%%", slot, start, end, floor_soc)
+        asyncio.run(_write_async(self._config, requests))
+
+    def clear_discharge_slot(self, slot: int) -> None:
+        """
+        Disable a discharge slot by resetting its times to 00:00.
+
+        Args:
+            slot: Slot index, 1–10.
+        """
+        if not (1 <= slot <= MAX_SLOTS):
+            raise ValueError(f"Slot must be 1–{MAX_SLOTS}, got {slot}")
+        requests = _set_charge_slot(discharge=True, idx=slot, slot=None, inv_type=self._inv_type)
+        log.info("Clearing discharge slot %d", slot)
         asyncio.run(_write_async(self._config, requests))
