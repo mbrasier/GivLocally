@@ -464,6 +464,7 @@ def cmd_setup() -> None:
     existing = load_settings()
     conn = existing.get("connection", DEFAULTS["connection"])
     solar = existing.get("solar", DEFAULTS["solar"])
+    usage = existing.get("usage", DEFAULTS["usage"])
 
     console = Console()
     console.print("\n[bold cyan]GivLocally Setup[/bold cyan]\n")
@@ -520,6 +521,16 @@ def cmd_setup() -> None:
         type=click.FloatRange(0.1, 1.0),
     )
 
+    # ── Usage ─────────────────────────────────────────────────────────────────
+    console.print("\n[bold]Household Usage[/bold]")
+    console.print("[dim]  Used to calculate how much overnight charge is needed.[/dim]\n")
+
+    daily_kwh = click.prompt(
+        "  Expected daily household consumption (kWh)",
+        default=usage["daily_kwh"],
+        type=click.FloatRange(0.0),
+    )
+
     # ── Save ──────────────────────────────────────────────────────────────────
     data = {
         "connection": {
@@ -535,6 +546,9 @@ def cmd_setup() -> None:
             "latitude": latitude,
             "longitude": longitude,
             "efficiency": efficiency,
+        },
+        "usage": {
+            "daily_kwh": daily_kwh,
         },
     }
 

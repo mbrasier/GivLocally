@@ -36,6 +36,9 @@ DEFAULTS: dict[str, Any] = {
         "longitude": 0.0,
         "efficiency": 0.80,
     },
+    "usage": {
+        "daily_kwh": 0.0,
+    },
 }
 
 

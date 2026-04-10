@@ -106,6 +106,9 @@ Runs an interactive wizard that saves your settings to a config file. Run this o
 - Latitude and longitude
 - System efficiency factor (0.0–1.0, accounting for inverter losses, temperature, and soiling)
 
+**Household usage** _(used to calculate required overnight charge level)_
+- Expected daily household consumption in kWh
+
 Settings are saved to:
 
 | Platform | Path |
