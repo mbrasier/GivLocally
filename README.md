@@ -1,5 +1,7 @@
 # GivLocally
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 Local control and monitoring of GivEnergy Gen3 inverters — no cloud, no account, no internet required.
 
 Communicates directly with the inverter over your local network using Modbus TCP.
