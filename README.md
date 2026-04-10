@@ -108,6 +108,27 @@ givlocally read --host 192.168.0.100 --batteries 2
 
 ---
 
+### `summary` — one-line status
+
+```
+givlocally summary [OPTIONS]
+```
+
+Prints a single line showing the most important inverter state at a glance:
+
+```
+Solar 2.41 kW  Load 0.87 kW  Grid exporting 1.20 kW  Battery charging 1.54 kW @ 62%
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `192.168.0.100` | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `-v, --verbose` | | Enable debug logging |
+
+---
+
 ### `charge-slot` — manage timed charge slots
 
 GivEnergy Gen3 inverters support up to 10 timed charge slots. Each slot defines a window during which the inverter will charge the battery from the grid, up to a target state of charge.
