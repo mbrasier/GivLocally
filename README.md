@@ -447,7 +447,7 @@ Override the battery's automatic behaviour for the current moment. These command
 givlocally battery charge [OPTIONS]
 ```
 
-Starts charging the battery from the grid at full power right now, regardless of any scheduled charge slots. Disables discharging while active.
+Starts charging the battery from the grid at full power right now, regardless of any scheduled charge slots. Does this by setting the battery SOC reserve to 100%, which tells the inverter it must maintain full charge and therefore draws from the grid continuously. Disables discharging while active.
 
 ```bash
 givlocally battery charge
@@ -459,7 +459,7 @@ givlocally battery charge
 givlocally battery export [OPTIONS]
 ```
 
-Discharges the battery at full power and exports any surplus above load demand to the grid. Sets discharge mode to max power (ECO mode off).
+Discharges the battery at full power and exports any surplus above load demand to the grid. Sets discharge mode to max power (ECO mode off) and restores the battery SOC reserve to the configured minimum so the inverter will discharge freely.
 
 ```bash
 givlocally battery export
@@ -471,7 +471,7 @@ givlocally battery export
 givlocally battery normal [OPTIONS]
 ```
 
-Restores normal automatic (dynamic/eco) operation: demand-matching discharge mode is re-enabled, charging is re-enabled, and the inverter manages the battery automatically according to your scheduled slots.
+Restores normal automatic (dynamic/eco) operation: demand-matching discharge mode is re-enabled, charging is re-enabled, and the battery SOC reserve is restored to the minimum configured in `givlocally setup`. Always run this after `battery charge` or `battery export` when you are done.
 
 ```bash
 givlocally battery normal
@@ -486,6 +486,51 @@ givlocally battery normal
 | `--retries` | `3` | Connection attempts before giving up |
 | `--inv-type` | _(standard)_ | Inverter variant: blank = standard Gen3, `3ph` = three-phase, `ems` = EMS |
 | `-v, --verbose` | | Enable debug logging |
+
+---
+
+### `server` — web dashboard
+
+```
+givlocally server [OPTIONS]
+```
+
+Starts a local web server serving a browser-based dashboard. The page reads the inverter and fetches the solar forecast on each load; refresh the browser to get updated data.
+
+The dashboard includes:
+
+- **Power flow** — live solar, load, grid, and battery readings
+- **Battery control** — one-click charge from mains, export to grid, and return to normal mode
+- **Energy today** — daily generation, import, export, and battery totals
+- **Schedule** — view active charge, discharge, and export slots with inline forms to set or clear any slot
+- **Overnight charge prediction** — today's and tomorrow's solar forecast alongside the overnight charge calculation, with a pre-filled form to apply the recommended SOC (or an edited value) directly to the configured charge slot
+
+```
+GivLocally web server → http://localhost:5000
+Inverter: 192.168.0.100:8899  Press Ctrl+C to stop.
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--listen` | `0.0.0.0` | Address the web server binds to |
+| `--web-port` | `5000` | Port the web server listens on |
+| `--host` | _(from setup)_ | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--inv-type` | _(standard)_ | Inverter variant: blank = standard Gen3, `3ph` = three-phase, `ems` = EMS |
+| `-v, --verbose` | | Enable debug logging |
+
+**Examples**
+
+```bash
+# Start on the default port
+givlocally server
+
+# Use a different port and make it reachable from other devices on the network
+givlocally server --web-port 8080
+```
+
+The server binds to `0.0.0.0` by default so it is reachable from any device on your local network (e.g. a phone or tablet), not just the computer running it.
 
 ---
 

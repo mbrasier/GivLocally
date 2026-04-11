@@ -169,12 +169,12 @@
               {% for i in range(1, 11) %}<option>{{ i }}</option>{% endfor %}
             </select>
           </label>
-          <label>Start <input type="time" name="start" class="w-time" value="01:00" required></label>
-          <label>End   <input type="time" name="end"   class="w-time" value="05:00" required></label>
+          <label>Start <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="start" class="w-time" value="01:00" required></label>
+          <label>End   <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="end"   class="w-time" value="05:00" required></label>
           <label>Target %
             <input type="number" name="target_soc" class="w-soc" min="4" max="100" value="100" required>
           </label>
-          <button class="btn-green" style="align-self:flex-end">Set</button>
+          <button class="btn-green">Set</button>
         </form>
       </div>
 
@@ -210,12 +210,12 @@
               {% for i in range(1, 11) %}<option>{{ i }}</option>{% endfor %}
             </select>
           </label>
-          <label>Start <input type="time" name="start" class="w-time" value="16:00" required></label>
-          <label>End   <input type="time" name="end"   class="w-time" value="20:00" required></label>
+          <label>Start <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="start" class="w-time" value="16:00" required></label>
+          <label>End   <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="end"   class="w-time" value="20:00" required></label>
           <label>Floor %
             <input type="number" name="floor_soc" class="w-soc" min="4" max="100" value="10" required>
           </label>
-          <button class="btn-blue" style="background:var(--blue);color:#fff;align-self:flex-end">Set</button>
+          <button class="btn-green">Set</button>
         </form>
       </div>
 
@@ -252,17 +252,100 @@
               {% for i in range(1, 4) %}<option>{{ i }}</option>{% endfor %}
             </select>
           </label>
-          <label>Start <input type="time" name="start" class="w-time" value="10:00" required></label>
-          <label>End   <input type="time" name="end"   class="w-time" value="15:00" required></label>
+          <label>Start <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="start" class="w-time" value="10:00" required></label>
+          <label>End   <input type="text" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" name="end"   class="w-time" value="15:00" required></label>
           <label>Floor %
             <input type="number" name="floor_soc" class="w-soc" min="4" max="100" value="20" required>
           </label>
-          <button class="btn-green" style="align-self:flex-end">Set</button>
+          <button class="btn-green">Set</button>
         </form>
       </div>
       {% endif %}
 
     </div>
+  </div>
+
+  {# ── Prediction ── #}
+  <div class="card">
+    <div class="card-title">Overnight charge prediction</div>
+
+    {% if pred_missing %}
+      <p style="font-size:.85rem;color:var(--muted)">
+        Run <code>givlocally setup</code> to configure the following before predictions are available:
+        {% for m in pred_missing %}<span class="chip chip-grey" style="margin-left:.25rem">{{ m }}</span>{% endfor %}
+      </p>
+
+    {% elif pred_error %}
+      <p style="font-size:.85rem;color:var(--red)">Forecast error: {{ pred_error }}</p>
+
+    {% elif prediction %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem">
+        <div class="metric" style="border-left:3px solid var(--muted)">
+          <div class="metric-label">Today's generation</div>
+          <div class="metric-value c-green">{{ "%.1f"|format(prediction.today.generation_kwh) }} kWh</div>
+          <div class="metric-sub">
+            {{ prediction.today.date.strftime("%A") }} {{ prediction.today.date.day }} {{ prediction.today.date.strftime("%B") }}
+            &middot; raw {{ "%.1f"|format(prediction.today.raw_kwh) }} kWh &times; {{ "%.0f"|format(prediction.efficiency * 100) }}%
+          </div>
+        </div>
+        <div class="metric" style="border-left:3px solid var(--green)">
+          <div class="metric-label">Tomorrow's generation</div>
+          <div class="metric-value c-green">{{ "%.1f"|format(prediction.tomorrow.generation_kwh) }} kWh</div>
+          <div class="metric-sub">
+            {{ prediction.tomorrow.date.strftime("%A") }} {{ prediction.tomorrow.date.day }} {{ prediction.tomorrow.date.strftime("%B") }}
+            &middot; raw {{ "%.1f"|format(prediction.tomorrow.raw_kwh) }} kWh &times; {{ "%.0f"|format(prediction.efficiency * 100) }}%
+          </div>
+        </div>
+      </div>
+
+      <table class="kv-table" style="margin-bottom:1rem">
+        <tr><td>Expected daily consumption</td><td>{{ "%.1f"|format(prediction.daily_kwh) }} kWh</td></tr>
+        <tr>
+          <td>{% if prediction.shortfall_kwh > 0 %}Shortfall solar cannot cover{% else %}Solar surplus{% endif %}</td>
+          <td>
+            {% if prediction.shortfall_kwh > 0 %}
+              <span class="c-yellow">{{ "%.1f"|format(prediction.shortfall_kwh) }} kWh</span>
+            {% else %}
+              <span class="c-green">{{ "%.1f"|format(prediction.tomorrow.generation_kwh - prediction.daily_kwh) }} kWh</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr><td>Battery capacity</td><td>{{ "%.1f"|format(prediction.capacity_kwh) }} kWh</td></tr>
+        <tr><td>Minimum SOC reserve</td><td>{{ prediction.min_soc }}%</td></tr>
+      </table>
+
+      <form method="post" action="/auto" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.75rem;font-weight:600;color:var(--muted)">
+          Charge slot
+          <select name="slot" style="height:2rem;padding:0 .45rem;border:1px solid var(--border);border-radius:5px;font-size:.85rem;background:var(--bg)">
+            {% for i in range(1, 11) %}
+            <option value="{{ i }}" {% if i == auto_cfg.charge_slot %}selected{% endif %}>{{ i }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.75rem;font-weight:600;color:var(--muted)">
+          Start
+          <input type="text" name="start" value="{{ auto_cfg.charge_start }}" placeholder="HH:MM"
+                 pattern="[0-2][0-9]:[0-5][0-9]" required
+                 style="height:2rem;width:5.5rem;padding:0 .45rem;border:1px solid var(--border);border-radius:5px;font-size:.85rem;background:var(--bg)">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.75rem;font-weight:600;color:var(--muted)">
+          End
+          <input type="text" name="end" value="{{ auto_cfg.charge_end }}" placeholder="HH:MM"
+                 pattern="[0-2][0-9]:[0-5][0-9]" required
+                 style="height:2rem;width:5.5rem;padding:0 .45rem;border:1px solid var(--border);border-radius:5px;font-size:.85rem;background:var(--bg)">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.75rem;font-weight:600;color:var(--muted)">
+          Target SOC %
+          <input type="number" name="target_soc" value="{{ prediction.recommended_soc }}" min="4" max="100" required
+                 style="height:2rem;width:5rem;padding:0 .45rem;border:1px solid var(--border);border-radius:5px;font-size:.85rem;background:var(--bg)">
+        </label>
+        <button class="btn-green" style="height:2rem;padding:0 1.1rem">Set charge slot</button>
+        <span style="align-self:flex-end;font-size:.75rem;color:var(--muted)">
+          Recommended: <strong>{{ prediction.recommended_soc }}%</strong>
+        </span>
+      </form>
+    {% endif %}
   </div>
 
 </div>{# end .stack #}
