@@ -59,7 +59,7 @@ def print_snapshot(snap: InverterSnapshot) -> None:
     t.add_row("PV total", _kw(pv_total))
     t.add_row("  PV1", _kw(snap.p_pv1_w))
     t.add_row("  PV2", _kw(snap.p_pv2_w))
-    bat_label = "Charging" if snap.p_battery_w >= 0 else "Discharging"
+    bat_label = "Discharging" if snap.p_battery_w >= 0 else "Charging"
     t.add_row(f"Battery ({bat_label})", _kw(abs(snap.p_battery_w)))
     grid_label = "Export" if snap.p_grid_w >= 0 else "Import"
     t.add_row(f"Grid ({grid_label})", _kw(abs(snap.p_grid_w)))
@@ -127,10 +127,21 @@ def print_snapshot(snap: InverterSnapshot) -> None:
         for slot in active_discharge:
             t.add_row(
                 f"Discharge slot {slot.index}",
-                f"{_slot_str(slot)}  [dim](target {snap.discharge_target_socs[slot.index - 1]}%)[/dim]",
+                f"{_slot_str(slot)}  [dim](floor {snap.discharge_target_socs[slot.index - 1]}%)[/dim]",
             )
     else:
         t.add_row("Discharge slots", "[dim]none active[/dim]")
+
+    active_export = [s for s in snap.export_slots if s.is_active]
+    if active_export:
+        for slot in active_export:
+            t.add_row(
+                f"Export slot {slot.index}",
+                f"{_slot_str(slot)}  [dim](floor {snap.export_floor_socs[slot.index - 1]}%)[/dim]",
+            )
+    elif snap.export_slots:
+        t.add_row("Export slots", "[dim]none active[/dim]")
+
     console.print(t)
 
     # ── Energy — today ────────────────────────────────────────────────────────

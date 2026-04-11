@@ -69,7 +69,7 @@ class InverterSnapshot:
     # --- Real-time power (W) ---
     p_pv1_w: float = 0.0
     p_pv2_w: float = 0.0
-    p_battery_w: float = 0.0       # positive = charging, negative = discharging
+    p_battery_w: float = 0.0       # positive = discharging, negative = charging
     p_grid_w: float = 0.0          # positive = export, negative = import
     p_load_w: float = 0.0
     p_inverter_out_w: float = 0.0
@@ -110,6 +110,10 @@ class InverterSnapshot:
     # --- Charge target SOC per slot ---
     charge_target_socs: list[int] = field(default_factory=list)
     discharge_target_socs: list[int] = field(default_factory=list)
+
+    # --- Export slots (up to 3, EMS inverters) ---
+    export_slots: list[TimeSlot] = field(default_factory=list)
+    export_floor_socs: list[int] = field(default_factory=list)
 
     # --- Cumulative energy ---
     e_pv_total_kwh: float = 0.0
@@ -297,6 +301,12 @@ def _inverter_snapshot(plant) -> InverterSnapshot:
         snap.charge_target_socs.append(_int(inv, f"charge_target_soc_{i}", default=100))
         snap.discharge_target_socs.append(_int(inv, f"discharge_target_soc_{i}", default=0))
 
+    # Export slots (EMS inverters; silently empty on other models)
+    for i in range(1, 4):
+        start, end = _slot_times(inv, f"export_slot_{i}")
+        snap.export_slots.append(TimeSlot(index=i, start=start, end=end))
+        snap.export_floor_socs.append(_int(inv, f"export_target_{i}", default=4))
+
     # Energy totals
     snap.e_pv_total_kwh = _float(inv, "e_pv_total")
     snap.e_pv1_day_kwh = _float(inv, "e_pv1_day")
@@ -345,7 +355,7 @@ async def _read_async(config: InverterConfig) -> InverterSnapshot:
             log.warning("Attempt %d failed: %s", attempt, exc)
             if attempt == config.retries:
                 raise
-            await asyncio.sleep(1)
+            await asyncio.sleep(config.retry_delay)
         finally:
             try:
                 await client.close()

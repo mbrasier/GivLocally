@@ -8,6 +8,7 @@ DEFAULT_HOST = "192.168.0.100"
 DEFAULT_PORT = 8899
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_RETRIES = 3
+DEFAULT_RETRY_DELAY = 30.0
 
 
 @dataclass
@@ -19,6 +20,7 @@ class InverterConfig:
     number_batteries: int = 1
     timeout: float = DEFAULT_TIMEOUT
     retries: int = DEFAULT_RETRIES
+    retry_delay: float = DEFAULT_RETRY_DELAY
 
     @classmethod
     def from_env(cls) -> "InverterConfig":

@@ -241,6 +241,30 @@ Requires `givlocally setup` to have been completed with solar panel, household u
 
 ---
 
+### `monitor` — live updating display
+
+```
+givlocally monitor
+```
+
+Shows the same one-line summary as `summary` but updates in place every minute. Press **Ctrl+C** to exit.
+
+```
+Monitoring — updates every 60s. Press Ctrl+C to exit.
+
+09:14:32  Solar 2.41 kW  Load 0.87 kW  Grid exporting 1.20 kW  Battery charging 1.54 kW @ 62%
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | _(from setup)_ | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--interval` | `60` | Seconds between updates (1–300) |
+| `-v, --verbose` | | Enable debug logging |
+
+---
+
 ### `summary` — one-line status
 
 ```
@@ -359,6 +383,109 @@ Resets the slot's start and end times to `00:00`, which disables it.
 ```bash
 givlocally discharge-slot clear 1 --host 192.168.0.100
 ```
+
+---
+
+### `export-slot` — manage timed export slots
+
+> **EMS inverters only.** Export slots are not available on standard Gen3 or three-phase inverters.
+
+EMS inverters support up to 3 timed export slots. Each slot defines a window during which the inverter will discharge the battery at full power and export surplus to the grid, down to a floor state of charge.
+
+#### `export-slot set` — configure a slot
+
+```
+givlocally export-slot set SLOT START END SOC [OPTIONS]
+```
+
+| Argument | Description |
+|---|---|
+| `SLOT` | Slot number (1–3) |
+| `START` | Start time in `HH:MM` format |
+| `END` | End time in `HH:MM` format |
+| `SOC` | Floor state of charge in percent (4–100). The inverter stops exporting early if the battery drops to this level before END. |
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `192.168.0.100` | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--inv-type` | _(standard)_ | Inverter variant: blank = standard Gen3, `3ph` = three-phase, `ems` = EMS |
+| `-v, --verbose` | | Enable debug logging |
+
+**Examples**
+
+```bash
+# Export slot 1 during afternoon peak, don't go below 20%
+givlocally export-slot set 1 16:00 19:00 20 --host 192.168.0.100
+
+# Export slot 2 in the morning, don't go below 10%
+givlocally export-slot set 2 07:00 09:00 10 --host 192.168.0.100
+```
+
+#### `export-slot clear` — disable a slot
+
+```
+givlocally export-slot clear SLOT [OPTIONS]
+```
+
+Resets the slot's start and end times to `00:00`, which disables it.
+
+```bash
+givlocally export-slot clear 1 --host 192.168.0.100
+```
+
+---
+
+### `battery` — immediate battery control
+
+Override the battery's automatic behaviour for the current moment. These commands take effect immediately and persist until you run `battery normal` or the inverter is restarted.
+
+#### `battery charge` — charge from the mains now
+
+```
+givlocally battery charge [OPTIONS]
+```
+
+Starts charging the battery from the grid at full power right now, regardless of any scheduled charge slots. Disables discharging while active.
+
+```bash
+givlocally battery charge
+```
+
+#### `battery export` — export to the grid now
+
+```
+givlocally battery export [OPTIONS]
+```
+
+Discharges the battery at full power and exports any surplus above load demand to the grid. Sets discharge mode to max power (ECO mode off).
+
+```bash
+givlocally battery export
+```
+
+#### `battery normal` — return to automatic mode
+
+```
+givlocally battery normal [OPTIONS]
+```
+
+Restores normal automatic (dynamic/eco) operation: demand-matching discharge mode is re-enabled, charging is re-enabled, and the inverter manages the battery automatically according to your scheduled slots.
+
+```bash
+givlocally battery normal
+```
+
+**Common options** (all three subcommands)
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | _(from setup)_ | IP address or hostname of the inverter |
+| `--port` | `8899` | Modbus TCP port |
+| `--retries` | `3` | Connection attempts before giving up |
+| `--inv-type` | _(standard)_ | Inverter variant: blank = standard Gen3, `3ph` = three-phase, `ems` = EMS |
+| `-v, --verbose` | | Enable debug logging |
 
 ---
 

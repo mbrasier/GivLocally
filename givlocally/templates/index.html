@@ -1,0 +1,271 @@
+{% extends "layout.html" %}
+{% block content %}
+
+{% if error %}
+<div class="error-banner">
+  <strong>Could not read inverter:</strong> {{ error }}
+</div>
+
+{% elif snap %}
+
+{# ── helpers ── #}
+{% set solar_kw  = (snap.p_pv1_w + snap.p_pv2_w) / 1000 %}
+{% set load_kw   = snap.p_load_w / 1000 %}
+{% set bat_kw    = snap.p_battery_w | abs / 1000 %}
+{% set grid_kw   = snap.p_grid_w | abs / 1000 %}
+
+<div class="stack">
+
+  {# ── Power flow ── #}
+  <div>
+    <div class="metrics" id="power-metrics">
+
+      <div class="metric">
+        <div class="metric-label">Solar</div>
+        <div class="metric-value c-green" id="m-solar">{{ "%.2f"|format(solar_kw) }} kW</div>
+        <div class="metric-sub">
+          PV1 {{ "%.2f"|format(snap.p_pv1_w/1000) }} · PV2 {{ "%.2f"|format(snap.p_pv2_w/1000) }}
+        </div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Load</div>
+        <div class="metric-value" id="m-load">{{ "%.2f"|format(load_kw) }} kW</div>
+        <div class="metric-sub">&nbsp;</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Grid</div>
+        {% if snap.p_grid_w > 50 %}
+          <div class="metric-value c-green" id="m-grid">{{ "%.2f"|format(grid_kw) }} kW</div>
+          <div class="metric-sub" id="m-grid-sub">Exporting</div>
+        {% elif snap.p_grid_w < -50 %}
+          <div class="metric-value c-red" id="m-grid">{{ "%.2f"|format(grid_kw) }} kW</div>
+          <div class="metric-sub" id="m-grid-sub">Importing</div>
+        {% else %}
+          <div class="metric-value c-muted" id="m-grid">—</div>
+          <div class="metric-sub" id="m-grid-sub">Idle</div>
+        {% endif %}
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Battery</div>
+        {% if snap.p_battery_w > 50 %}
+          <div class="metric-value c-blue" id="m-battery">{{ "%.2f"|format(bat_kw) }} kW</div>
+          <div class="metric-sub" id="m-battery-sub">Discharging · <strong id="m-soc">{{ snap.battery_soc_pct }}%</strong></div>
+        {% elif snap.p_battery_w < -50 %}
+          <div class="metric-value c-yellow" id="m-battery">{{ "%.2f"|format(bat_kw) }} kW</div>
+          <div class="metric-sub" id="m-battery-sub">Charging · <strong id="m-soc">{{ snap.battery_soc_pct }}%</strong></div>
+        {% else %}
+          <div class="metric-value c-muted" id="m-battery">—</div>
+          <div class="metric-sub" id="m-battery-sub">Idle · <strong id="m-soc">{{ snap.battery_soc_pct }}%</strong></div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  {# ── Battery control + battery detail ── #}
+  <div class="detail-grid">
+
+    <div class="card">
+      <div class="card-title">Immediate Battery Control</div>
+      <div class="btn-row" style="margin-bottom:.75rem">
+        <form method="post" action="/battery/charge">
+          <button class="btn-yellow">⚡ Charge from mains</button>
+        </form>
+        <form method="post" action="/battery/export">
+          <button class="btn-green">↑ Export to grid</button>
+        </form>
+        <form method="post" action="/battery/normal">
+          <button class="btn-grey">↺ Normal mode</button>
+        </form>
+      </div>
+      <table class="kv-table">
+        <tr><td>State of charge</td>
+            <td><strong>{{ snap.battery_soc_pct }}%</strong></td></tr>
+        <tr><td>Charging</td>
+            <td>{% if snap.charge_enabled %}<span class="chip chip-green">Enabled</span>
+                {% else %}<span class="chip chip-grey">Disabled</span>{% endif %}</td></tr>
+        <tr><td>Discharging</td>
+            <td>{% if snap.discharge_enabled %}<span class="chip chip-green">Enabled</span>
+                {% else %}<span class="chip chip-grey">Disabled</span>{% endif %}</td></tr>
+        <tr><td>Eco mode</td>
+            <td>{% if snap.eco_mode %}<span class="chip chip-green">On</span>
+                {% else %}<span class="chip chip-grey">Off</span>{% endif %}</td></tr>
+        {% if snap.battery_pause_mode %}
+        <tr><td>Pause mode</td><td>{{ snap.battery_pause_mode }}</td></tr>
+        {% endif %}
+        <tr><td>Inverter temp</td><td>{{ "%.0f"|format(snap.temp_inverter_c) }} °C</td></tr>
+        <tr><td>Battery temp</td><td>{{ "%.0f"|format(snap.temp_battery_c) }} °C</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Energy Today</div>
+      <table class="kv-table">
+        <tr><td>PV generation</td>
+            <td class="c-green">{{ "%.2f"|format(snap.e_pv1_day_kwh + snap.e_pv2_day_kwh) }} kWh</td></tr>
+        <tr><td>Grid import</td>
+            <td class="c-red">{{ "%.2f"|format(snap.e_grid_in_day_kwh) }} kWh</td></tr>
+        <tr><td>Grid export</td>
+            <td class="c-green">{{ "%.2f"|format(snap.e_grid_out_day_kwh) }} kWh</td></tr>
+        <tr><td>Battery charged</td>
+            <td class="c-yellow">{{ "%.2f"|format(snap.e_battery_charge_today_kwh) }} kWh</td></tr>
+        <tr><td>Battery discharged</td>
+            <td class="c-blue">{{ "%.2f"|format(snap.e_battery_discharge_today_kwh) }} kWh</td></tr>
+      </table>
+      <div class="card-title" style="margin-top:1rem">System</div>
+      <table class="kv-table">
+        {% if snap.system_time %}
+        <tr><td>Inverter time</td><td>{{ snap.system_time.strftime("%Y-%m-%d %H:%M") }}</td></tr>
+        {% endif %}
+        <tr><td>Model</td><td>{{ snap.model or "—" }}</td></tr>
+        <tr><td>Firmware</td><td>{{ snap.firmware_version or "—" }}</td></tr>
+      </table>
+      <div style="margin-top:.75rem">
+        <form method="post" action="/time-sync">
+          <button class="btn-outline">Sync inverter clock</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Schedule ── #}
+  <div class="card">
+    <div class="card-title">Schedule</div>
+    <div class="slots-grid">
+
+      {# Charge slots #}
+      <div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:.5rem">Charge slots</div>
+        <table class="slot-table">
+          <thead><tr><th>Slot</th><th>Window</th><th>Target</th><th></th></tr></thead>
+          <tbody>
+          {% set active_charge = snap.charge_slots | selectattr("is_active") | list %}
+          {% if active_charge %}
+            {% for slot in active_charge %}
+            <tr>
+              <td>{{ slot.index }}</td>
+              <td>{{ slot.start }} → {{ slot.end }}</td>
+              <td>{{ snap.charge_target_socs[slot.index - 1] }}%</td>
+              <td>
+                <form method="post" action="/charge-slot/clear" style="display:inline">
+                  <input type="hidden" name="slot" value="{{ slot.index }}">
+                  <button class="btn-outline" style="color:var(--red)">Clear</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="4" class="tag-inactive">No active slots</td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+        <form method="post" action="/charge-slot/set" class="set-form">
+          <label>Slot
+            <select name="slot" class="w-slot">
+              {% for i in range(1, 11) %}<option>{{ i }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Start <input type="time" name="start" class="w-time" value="01:00" required></label>
+          <label>End   <input type="time" name="end"   class="w-time" value="05:00" required></label>
+          <label>Target %
+            <input type="number" name="target_soc" class="w-soc" min="4" max="100" value="100" required>
+          </label>
+          <button class="btn-green" style="align-self:flex-end">Set</button>
+        </form>
+      </div>
+
+      {# Discharge slots #}
+      <div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:.5rem">Discharge slots</div>
+        <table class="slot-table">
+          <thead><tr><th>Slot</th><th>Window</th><th>Floor</th><th></th></tr></thead>
+          <tbody>
+          {% set active_discharge = snap.discharge_slots | selectattr("is_active") | list %}
+          {% if active_discharge %}
+            {% for slot in active_discharge %}
+            <tr>
+              <td>{{ slot.index }}</td>
+              <td>{{ slot.start }} → {{ slot.end }}</td>
+              <td>{{ snap.discharge_target_socs[slot.index - 1] }}%</td>
+              <td>
+                <form method="post" action="/discharge-slot/clear" style="display:inline">
+                  <input type="hidden" name="slot" value="{{ slot.index }}">
+                  <button class="btn-outline" style="color:var(--red)">Clear</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="4" class="tag-inactive">No active slots</td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+        <form method="post" action="/discharge-slot/set" class="set-form">
+          <label>Slot
+            <select name="slot" class="w-slot">
+              {% for i in range(1, 11) %}<option>{{ i }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Start <input type="time" name="start" class="w-time" value="16:00" required></label>
+          <label>End   <input type="time" name="end"   class="w-time" value="20:00" required></label>
+          <label>Floor %
+            <input type="number" name="floor_soc" class="w-soc" min="4" max="100" value="10" required>
+          </label>
+          <button class="btn-blue" style="background:var(--blue);color:#fff;align-self:flex-end">Set</button>
+        </form>
+      </div>
+
+      {# Export slots (EMS only — hidden if inverter returned none) #}
+      {% if snap.export_slots %}
+      <div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:.5rem">Export slots <span style="font-weight:400;color:var(--muted)">(EMS)</span></div>
+        <table class="slot-table">
+          <thead><tr><th>Slot</th><th>Window</th><th>Floor</th><th></th></tr></thead>
+          <tbody>
+          {% set active_export = snap.export_slots | selectattr("is_active") | list %}
+          {% if active_export %}
+            {% for slot in active_export %}
+            <tr>
+              <td>{{ slot.index }}</td>
+              <td>{{ slot.start }} → {{ slot.end }}</td>
+              <td>{{ snap.export_floor_socs[slot.index - 1] }}%</td>
+              <td>
+                <form method="post" action="/export-slot/clear" style="display:inline">
+                  <input type="hidden" name="slot" value="{{ slot.index }}">
+                  <button class="btn-outline" style="color:var(--red)">Clear</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="4" class="tag-inactive">No active slots</td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+        <form method="post" action="/export-slot/set" class="set-form">
+          <label>Slot
+            <select name="slot" class="w-slot">
+              {% for i in range(1, 4) %}<option>{{ i }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Start <input type="time" name="start" class="w-time" value="10:00" required></label>
+          <label>End   <input type="time" name="end"   class="w-time" value="15:00" required></label>
+          <label>Floor %
+            <input type="number" name="floor_soc" class="w-soc" min="4" max="100" value="20" required>
+          </label>
+          <button class="btn-green" style="align-self:flex-end">Set</button>
+        </form>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>{# end .stack #}
+{% endif %}
+{% endblock %}
+

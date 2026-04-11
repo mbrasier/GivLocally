@@ -150,6 +150,11 @@ def cmd_summary(host: str, port: int, retries: int, verbose: bool) -> None:
             traceback.print_exc()
         sys.exit(1)
 
+    Console().print(_summary_text(snap))
+
+
+def _summary_text(snap) -> str:
+    """Return a Rich markup string summarising the inverter state."""
     solar_kw = (snap.p_pv1_w + snap.p_pv2_w) / 1000
     load_kw = snap.p_load_w / 1000
     bat_kw = abs(snap.p_battery_w) / 1000
@@ -157,9 +162,9 @@ def cmd_summary(host: str, port: int, retries: int, verbose: bool) -> None:
     soc = snap.battery_soc_pct
 
     if snap.p_battery_w > 50:
-        bat_status = f"[yellow]charging {bat_kw:.2f} kW[/yellow]"
-    elif snap.p_battery_w < -50:
         bat_status = f"[cyan]discharging {bat_kw:.2f} kW[/cyan]"
+    elif snap.p_battery_w < -50:
+        bat_status = f"[yellow]charging {bat_kw:.2f} kW[/yellow]"
     else:
         bat_status = "[dim]idle[/dim]"
 
@@ -170,13 +175,77 @@ def cmd_summary(host: str, port: int, retries: int, verbose: bool) -> None:
     else:
         grid_status = "[dim]idle[/dim]"
 
-    console = Console()
-    console.print(
+    return (
         f"Solar [green]{solar_kw:.2f} kW[/green]  "
         f"Load [red]{load_kw:.2f} kW[/red]  "
         f"Grid {grid_status}  "
         f"Battery {bat_status} @ [bold]{soc}%[/bold]"
     )
+
+
+@cli.command("monitor")
+@click.option(
+    "--host",
+    default=default_host,
+    show_default="192.168.0.100",
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=default_port,
+    show_default="8899",
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--interval",
+    default=60,
+    show_default=True,
+    type=click.IntRange(1, 300),
+    help="Seconds between updates.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_monitor(host: str, port: int, retries: int, interval: int, verbose: bool) -> None:
+    """Live-updating summary that refreshes every interval seconds. Press Ctrl+C to exit."""
+    import asyncio
+    import time
+    from datetime import datetime
+    from rich.live import Live
+    from rich.text import Text
+    from givlocally.reader import _read_async
+
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+
+    console = Console()
+    console.print(f"[dim]Monitoring — updates every {interval}s. Press Ctrl+C to exit.[/dim]\n")
+
+    try:
+        with Live(console=console, refresh_per_second=1) as live:
+            while True:
+                try:
+                    snap = asyncio.run(_read_async(config))
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    text = Text.from_markup(f"[dim]{timestamp}[/dim]  {_summary_text(snap)}")
+                except KeyboardInterrupt:
+                    raise
+                except (Exception, asyncio.CancelledError) as exc:
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    text = Text.from_markup(
+                        f"[dim]{timestamp}[/dim]  [bold red]Error:[/bold red] {exc}  "
+                        f"[dim](retrying in {interval}s)[/dim]"
+                    )
+                live.update(text)
+                time.sleep(interval)
+    except KeyboardInterrupt:
+        pass
 
 
 @cli.group("charge-slot")
@@ -456,6 +525,247 @@ def cmd_discharge_slot_clear(
             import traceback
             traceback.print_exc()
         import sys
+        sys.exit(1)
+
+
+@cli.group("export-slot")
+def export_slot_group() -> None:
+    """Manage timed export slots on the inverter (EMS inverters only)."""
+
+
+@export_slot_group.command("set")
+@click.argument("slot", type=click.IntRange(1, 3))
+@click.argument("start")
+@click.argument("end")
+@click.argument("floor_soc", metavar="SOC", type=click.IntRange(4, 100))
+@click.option(
+    "--host",
+    default=default_host,
+    show_default="192.168.0.100",
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=default_port,
+    show_default="8899",
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default=default_inv_type,
+    show_default="standard",
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_export_slot_set(
+    slot: int,
+    start: str,
+    end: str,
+    floor_soc: int,
+    host: str,
+    port: int,
+    retries: int,
+    inv_type: str,
+    verbose: bool,
+) -> None:
+    """Configure a timed export slot.
+
+    \b
+    Arguments:
+      SLOT   Slot number to configure (1–3).
+      START  Time to start exporting, in HH:MM format.
+      END    Time to stop exporting, in HH:MM format.
+      SOC    Floor state of charge in percent (4–100). The inverter stops
+             exporting early if the battery drops to this level before END.
+
+    \b
+    Examples:
+      givlocally export-slot set 1 10:00 15:00 20
+          Slot 1: export from 10:00 to 15:00, stop at 20%.
+      givlocally export-slot set 2 06:00 11:00 10
+          Slot 2: export from 06:00 to 11:00, stop at 10%.
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        InverterWriter(config, inv_type=inv_type).set_export_slot(slot, start, end, floor_soc)
+        err.print(f"[green]Export slot {slot} set to {start} → {end}, floor {floor_soc}%[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        import sys
+        sys.exit(1)
+
+
+@export_slot_group.command("clear")
+@click.argument("slot", type=click.IntRange(1, 3))
+@click.option(
+    "--host",
+    default=default_host,
+    show_default="192.168.0.100",
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=default_port,
+    show_default="8899",
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default=default_inv_type,
+    show_default="standard",
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_export_slot_clear(
+    slot: int,
+    host: str,
+    port: int,
+    retries: int,
+    inv_type: str,
+    verbose: bool,
+) -> None:
+    """Disable export SLOT by resetting its times to 00:00.
+
+    SLOT is 1–3.
+
+    Example: givlocally export-slot clear 1
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        InverterWriter(config, inv_type=inv_type).clear_export_slot(slot)
+        err.print(f"[green]Export slot {slot} cleared[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        import sys
+        sys.exit(1)
+
+
+def _battery_connection_options(fn):
+    """Shared host/port/retries/inv-type/verbose options for battery commands."""
+    for decorator in reversed([
+        click.option("--host", default=default_host, show_default="192.168.0.100",
+                     envvar="GIVENERGY_HOST",
+                     help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle."),
+        click.option("--port", default=default_port, show_default="8899",
+                     envvar="GIVENERGY_PORT", help="Modbus TCP port on the inverter."),
+        click.option("--retries", default=3, show_default=True,
+                     help="Number of connection attempts before giving up."),
+        click.option("--inv-type", default=default_inv_type, show_default="standard",
+                     envvar="GIVENERGY_INV_TYPE",
+                     type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+                     help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS."),
+        click.option("--verbose", "-v", is_flag=True, help="Enable debug logging."),
+    ]):
+        fn = decorator(fn)
+    return fn
+
+
+@cli.group("battery")
+def battery_group() -> None:
+    """Immediately control battery charge/discharge behaviour."""
+
+
+@battery_group.command("charge")
+@_battery_connection_options
+def cmd_battery_charge(host: str, port: int, retries: int, inv_type: str, verbose: bool) -> None:
+    """Charge the battery from the mains at full power right now.
+
+    Enables charging and AC (grid) charging and disables discharging.
+    The inverter will draw from the grid until you run 'battery normal'.
+
+    Example: givlocally battery charge
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    try:
+        InverterWriter(config, inv_type=inv_type).force_charge()
+        err.print("[green]Battery charging from mains at full power.[/green]  "
+                  "Run [bold]givlocally battery normal[/bold] to return to automatic mode.")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+@battery_group.command("export")
+@_battery_connection_options
+def cmd_battery_export(host: str, port: int, retries: int, inv_type: str, verbose: bool) -> None:
+    """Discharge the battery at full power, exporting surplus to the grid.
+
+    Sets discharge mode to max power (ECO_MODE off) and enables discharging.
+    Any battery or solar output above your load demand will be exported.
+    Run 'battery normal' to return to automatic mode.
+
+    Example: givlocally battery export
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    settings = load_settings()
+    min_soc = settings.get("battery", {}).get("min_soc", 4)
+    try:
+        InverterWriter(config, inv_type=inv_type).force_export(min_soc=min_soc)
+        err.print("[green]Battery discharging at full power — surplus exported to grid.[/green]  "
+                  "Run [bold]givlocally battery normal[/bold] to return to automatic mode.")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+@battery_group.command("normal")
+@_battery_connection_options
+def cmd_battery_normal(host: str, port: int, retries: int, inv_type: str, verbose: bool) -> None:
+    """Return the battery to normal automatic (dynamic/eco) operation.
+
+    Restores demand-matching discharge mode, re-enables charging and AC charging,
+    and restores the battery SOC reserve to the minimum configured in setup.
+
+    Example: givlocally battery normal
+    """
+    _setup_logging(verbose)
+    config = InverterConfig(host=host, port=port, retries=retries)
+    settings = load_settings()
+    min_soc = settings.get("battery", {}).get("min_soc", 4)
+    try:
+        InverterWriter(config, inv_type=inv_type).set_normal_mode(min_soc=min_soc)
+        err.print(f"[green]Battery returned to normal automatic mode (SOC reserve restored to {min_soc}%).[/green]")
+    except Exception as exc:
+        err.print(f"[bold red]Error:[/bold red] {exc}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
 
 
@@ -850,6 +1160,89 @@ def cmd_setup() -> None:
     path = save_settings(data)
     console.print(f"\n[green]Settings saved to {path}[/green]")
     console.print("[dim]These will be used as defaults for all commands.[/dim]\n")
+
+
+@cli.command("server")
+@click.option(
+    "--listen",
+    default="0.0.0.0",
+    show_default=True,
+    help="Address for the web server to listen on.",
+)
+@click.option(
+    "--web-port",
+    default=5000,
+    show_default=True,
+    type=int,
+    help="Port for the web server.",
+)
+@click.option(
+    "--host",
+    default=default_host,
+    show_default="192.168.0.100",
+    envvar="GIVENERGY_HOST",
+    help="IP address (or hostname) of the GivEnergy inverter / WiFi dongle.",
+)
+@click.option(
+    "--port",
+    default=default_port,
+    show_default="8899",
+    envvar="GIVENERGY_PORT",
+    help="Modbus TCP port on the inverter.",
+)
+@click.option(
+    "--retries",
+    default=3,
+    show_default=True,
+    help="Number of connection attempts before giving up.",
+)
+@click.option(
+    "--inv-type",
+    default=default_inv_type,
+    show_default="standard",
+    envvar="GIVENERGY_INV_TYPE",
+    type=click.Choice(["", "3ph", "ems"], case_sensitive=False),
+    help="Inverter variant: blank = standard Gen3, '3ph' = three-phase, 'ems' = EMS.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+def cmd_server(
+    listen: str,
+    web_port: int,
+    host: str,
+    port: int,
+    retries: int,
+    inv_type: str,
+    verbose: bool,
+) -> None:
+    """Start the GivLocally web server.
+
+    Serves a browser-based dashboard showing live inverter data and controls
+    for all commands. Reads inverter connection details from setup config by
+    default; options override saved values.
+
+    Example: givlocally server --web-port 8080
+    """
+    import logging as _logging
+    _setup_logging(verbose)
+    # Suppress Flask/werkzeug noise unless verbose
+    if not verbose:
+        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
+
+    settings = load_settings()
+    battery = settings.get("battery", {})
+    min_soc = battery.get("min_soc", 4)
+
+    config = InverterConfig(host=host, port=port, retries=retries)
+
+    from .server import create_app
+    app = create_app(config, inv_type=inv_type, min_soc=min_soc)
+
+    Console().print(
+        f"[bold green]GivLocally web server[/bold green] → "
+        f"http://{'localhost' if listen == '0.0.0.0' else listen}:{web_port}\n"
+        f"[dim]Inverter: {host}:{port}  Press Ctrl+C to stop.[/dim]"
+    )
+    app.run(host=listen, port=web_port, threaded=True)
 
 
 if __name__ == "__main__":

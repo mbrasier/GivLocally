@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GivLocally</title>
+  <style>
+    :root {
+      --bg: #f0f4f1;
+      --surface: #ffffff;
+      --border: #d1ddd4;
+      --header: #1a3d2a;
+      --text: #1a2e1f;
+      --muted: #5a7262;
+      --green: #16a34a;
+      --green-light: #dcfce7;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --yellow: #d97706;
+      --yellow-light: #fef3c7;
+      --blue: #0369a1;
+      --blue-light: #e0f2fe;
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px;
+           background: var(--bg); color: var(--text); line-height: 1.5; }
+
+    /* ── Header ── */
+    header { background: var(--header); color: #fff; padding: .75rem 1.25rem;
+             display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .brand { display: flex; align-items: baseline; gap: .75rem; }
+    .brand h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -.01em; }
+    .brand .serial { font-size: .8rem; opacity: .65; }
+    #last-updated { font-size: .75rem; opacity: .6; white-space: nowrap; }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem; }
+    .stack { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* ── Alerts ── */
+    .alert { padding: .6rem 1rem; border-radius: 6px; font-size: .85rem; margin-bottom: .5rem; }
+    .alert-success { background: var(--green-light); color: #14532d; border: 1px solid #86efac; }
+    .alert-error   { background: var(--red-light);   color: #7f1d1d; border: 1px solid #fca5a5; }
+
+    /* ── Cards ── */
+    .card { background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.25rem; box-shadow: var(--shadow); }
+    .card-title { font-size: .7rem; font-weight: 600; text-transform: uppercase;
+                  letter-spacing: .06em; color: var(--muted); margin-bottom: .75rem; }
+
+    /* ── Metric grid (power flow) ── */
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
+    @media (max-width: 640px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+    .metric { border-radius: 8px; padding: .875rem 1rem; border: 1px solid var(--border);
+              background: var(--surface); box-shadow: var(--shadow); }
+    .metric-label { font-size: .7rem; font-weight: 600; text-transform: uppercase;
+                    letter-spacing: .06em; color: var(--muted); }
+    .metric-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; margin: .2rem 0; }
+    .metric-sub   { font-size: .75rem; color: var(--muted); }
+    .c-green  { color: var(--green); }
+    .c-red    { color: var(--red); }
+    .c-yellow { color: var(--yellow); }
+    .c-blue   { color: var(--blue); }
+    .c-muted  { color: var(--muted); }
+
+    /* ── Two-column detail grid ── */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    @media (max-width: 640px) { .detail-grid { grid-template-columns: 1fr; } }
+    .kv-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .kv-table td { padding: .3rem 0; vertical-align: top; }
+    .kv-table td:first-child { color: var(--muted); width: 55%; padding-right: .5rem; }
+    .kv-table td:last-child  { font-weight: 600; }
+
+    /* ── Controls (battery) ── */
+    .btn-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+    button, .btn { border: none; border-radius: 6px; padding: .5rem 1rem; font-size: .85rem;
+                   font-weight: 600; cursor: pointer; transition: opacity .1s; }
+    button:hover, .btn:hover { opacity: .85; }
+    .btn-green  { background: var(--green);  color: #fff; }
+    .btn-red    { background: var(--red);    color: #fff; }
+    .btn-yellow { background: var(--yellow); color: #fff; }
+    .btn-grey   { background: #64748b;       color: #fff; }
+    .btn-outline { background: transparent; border: 1px solid var(--border);
+                   color: var(--text); padding: .35rem .75rem; font-size: .8rem; font-weight: 500; }
+
+    /* ── Slots ── */
+    .slots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+    @media (max-width: 800px) { .slots-grid { grid-template-columns: 1fr; } }
+    .slot-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-bottom: .75rem; }
+    .slot-table th { text-align: left; color: var(--muted); font-weight: 600;
+                     font-size: .7rem; text-transform: uppercase; letter-spacing: .05em;
+                     padding: .25rem .35rem; border-bottom: 1px solid var(--border); }
+    .slot-table td { padding: .3rem .35rem; vertical-align: middle; }
+    .slot-table tr:not(:last-child) td { border-bottom: 1px solid #f0f4f1; }
+    .tag-inactive { color: var(--muted); font-style: italic; }
+
+    /* ── Set-slot forms ── */
+    .set-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .4rem;
+                padding-top: .5rem; border-top: 1px solid var(--border); margin-top: .25rem; }
+    .set-form label { font-size: .7rem; font-weight: 600; color: var(--muted);
+                      display: flex; flex-direction: column; gap: .2rem; }
+    .set-form input, .set-form select {
+      border: 1px solid var(--border); border-radius: 5px; padding: .35rem .45rem;
+      font-size: .82rem; background: var(--bg); color: var(--text); width: 100%;
+    }
+    .set-form input:focus, .set-form select:focus {
+      outline: 2px solid var(--green); outline-offset: 1px;
+    }
+    .set-form .w-slot  { width: 3.5rem; }
+    .set-form .w-time  { width: 5rem; }
+    .set-form .w-soc   { width: 3.8rem; }
+
+    /* ── Chip badges ── */
+    .chip { display: inline-block; padding: .15rem .5rem; border-radius: 20px;
+            font-size: .72rem; font-weight: 600; }
+    .chip-green  { background: var(--green-light);  color: #14532d; }
+    .chip-red    { background: var(--red-light);    color: #7f1d1d; }
+    .chip-yellow { background: var(--yellow-light); color: #78350f; }
+    .chip-grey   { background: #f1f5f9; color: #475569; }
+
+    .error-banner { background: var(--red-light); border: 1px solid #fca5a5;
+                    border-radius: 8px; padding: 1rem 1.25rem; color: #7f1d1d; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>GivLocally</h1>
+    {% if snap %}<span class="serial">{{ snap.serial_number or "GivEnergy Inverter" }}</span>{% endif %}
+  </div>
+  <span style="font-size:.75rem;opacity:.6">{{ now.strftime("%H:%M:%S") if now }}</span>
+</header>
+
+<main class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:.75rem">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
